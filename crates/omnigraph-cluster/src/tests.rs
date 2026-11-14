@@ -4746,3 +4746,24 @@ async fn plan_observes_graph_removal_and_policy_rebinding() {
         assert!(!dir.path().join(CLUSTER_LOCK_FILE).exists());
     }
 }
+
+/// The recorded graph identity is `<root>/graphs/<id>.omni` in the platform's
+/// own spelling, so it equals `admission::canonical_graph_uri` everywhere and
+/// stays byte-identical to every identity already stored on Unix.
+#[test]
+fn managed_graph_root_identity_uses_the_platform_spelling() {
+    #[cfg(unix)]
+    assert_eq!(
+        store::managed_graph_root_identity("file:///srv/og", "knowledge"),
+        "/srv/og/graphs/knowledge.omni"
+    );
+    #[cfg(windows)]
+    assert_eq!(
+        store::managed_graph_root_identity(r"file://C:\og", "knowledge"),
+        r"C:\og\graphs\knowledge.omni"
+    );
+    assert_eq!(
+        store::managed_graph_root_identity("s3://bucket/og", "knowledge"),
+        "s3://bucket/og/graphs/knowledge.omni"
+    );
+}

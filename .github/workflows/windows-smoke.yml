@@ -1,0 +1,66 @@
+name: Windows smoke
+
+# Local storage roots on Windows (issue #907): the path unit tests, then the
+# built CLI and server against a standalone graph, its branches, a local
+# cluster root and a server booted from that root. No other job runs the
+# binaries on Windows; the release archive job only checks that they start.
+on:
+  pull_request:
+    paths:
+      - "crates/omnigraph-storage/**"
+      - "crates/omnigraph-cluster/**"
+      - "crates/omnigraph-cli/**"
+      - "crates/omnigraph-server/**"
+      - "scripts/windows-smoke.ps1"
+      - ".github/workflows/windows-smoke.yml"
+      - "Cargo.lock"
+  push:
+    branches:
+      - main
+      - "fix/windows-**"
+  workflow_dispatch:
+
+concurrency:
+  group: windows-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Local roots on Windows
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install protoc
+        run: choco install protoc -y
+
+      # rust-toolchain.toml pins the toolchain; this installs exactly that.
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install
+          cargo --version
+
+      - name: Cache Rust build data
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: |
+            . -> target
+
+      - name: Local-root unit tests
+        run: cargo test --locked -p omnigraph-storage --lib local_root
+
+      - name: Build the CLI and server
+        run: cargo build --locked -p omnigraph-cli -p omnigraph-server
+
+      - name: Smoke local roots
+        shell: pwsh
+        run: ./scripts/windows-smoke.ps1 -Bin target/debug
