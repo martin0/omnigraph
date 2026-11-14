@@ -471,11 +471,31 @@ pub(crate) fn admitted_graph_id(
     graph_uri: &str,
 ) -> Result<String, Diagnostic> {
     let canonical = canonical_graph_uri(graph_uri)?;
-    let expected_prefix = format!("{}/graphs/", canonical_root.trim_end_matches('/'));
-    let canonical = canonical_store_uri(&canonical)?;
-    let graph_id = canonical
-        .strip_prefix(&expected_prefix)
-        .and_then(|tail| tail.strip_suffix(".omni"))
+    let local = matches!(
+        omnigraph_storage::storage_kind_for_uri(canonical_root),
+        Ok(omnigraph_storage::StorageKind::Local)
+    );
+    let graph_id = if local {
+        // A local identity is a native path. Membership is decided on path
+        // components, so the platform separator never changes the answer.
+        let graphs =
+            std::path::Path::new(canonical_root.trim_start_matches("file://")).join("graphs");
+        std::path::Path::new(canonical.trim_start_matches("file://"))
+            .strip_prefix(&graphs)
+            .ok()
+            .filter(|tail| tail.components().count() == 1)
+            .and_then(|tail| tail.to_str())
+            .and_then(|tail| tail.strip_suffix(".omni"))
+            .map(str::to_owned)
+    } else {
+        let expected_prefix = format!("{}/graphs/", canonical_root.trim_end_matches('/'));
+        canonical_store_uri(&canonical)?
+            .strip_prefix(&expected_prefix)
+            .and_then(|tail| tail.strip_suffix(".omni"))
+            .map(str::to_owned)
+    };
+    let graph_id = graph_id
+        .as_deref()
         .filter(|id| !id.is_empty() && !id.contains('/'))
         .ok_or_else(|| {
             Diagnostic::error(

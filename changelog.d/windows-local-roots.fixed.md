@@ -1,0 +1,1 @@
+- Local storage roots work on Windows: cluster roots, a server booted from one, and branches on a local graph no longer fail on the `\\?\` path form. A root `file://` cannot spell is refused.

@@ -65,13 +65,33 @@ pub(crate) fn canonical_storage_root(root: &str) -> Result<String, Diagnostic> {
     match storage_kind_for_uri(&normalized)
         .map_err(|error| Diagnostic::error("storage_root_invalid", "storage", error.to_string()))?
     {
-        StorageKind::Local => {
-            let path = std::fs::canonicalize(normalized.trim_start_matches("file://")).map_err(
-                |error| Diagnostic::error("storage_root_invalid", "storage", error.to_string()),
-            )?;
-            Ok(format!("file://{}", path.to_string_lossy()))
-        }
+        StorageKind::Local => canonical_local_root(Path::new(&normalized)),
         _ => Ok(normalized),
+    }
+}
+
+/// The canonical `file://` identity of an existing local root. Symlinks
+/// resolve, and a path that cannot be addressed as `file://` and read back
+/// unchanged is refused here, before it reaches a ledger or a receipt.
+fn canonical_local_root(path: &Path) -> Result<String, Diagnostic> {
+    let invalid = |error: String| Diagnostic::error("storage_root_invalid", "storage", error);
+    let canonical = omnigraph_storage::canonicalize_local_path(path)
+        .map_err(|error| invalid(error.to_string()))?;
+    omnigraph_storage::local_file_uri(&canonical).map_err(|error| invalid(error.to_string()))
+}
+
+/// `<canonical root>/graphs/<id>.omni`, spelled as the engine's canonical
+/// graph identity spells it. A local root joins with the platform separator,
+/// so the result compares equal to `admission::canonical_graph_uri` on every
+/// platform; an object-store root keeps its URI form.
+pub(crate) fn managed_graph_root_identity(canonical_root: &str, graph: &str) -> String {
+    match storage_kind_for_uri(canonical_root) {
+        Ok(StorageKind::Local) => Path::new(canonical_root.trim_start_matches("file://"))
+            .join("graphs")
+            .join(format!("{graph}.omni"))
+            .to_string_lossy()
+            .into_owned(),
+        _ => format!("{canonical_root}/graphs/{graph}.omni"),
     }
 }
 
@@ -418,10 +438,7 @@ impl ClusterStore {
     /// This is metadata only; it does not reread the config or ledger.
     pub(crate) fn canonical_root(&self) -> Result<String, Diagnostic> {
         if self.kind() == StorageKind::Local {
-            let path = std::fs::canonicalize(&self.display_root).map_err(|err| {
-                Diagnostic::error("storage_root_invalid", "storage", err.to_string())
-            })?;
-            Ok(format!("file://{}", path.to_string_lossy()))
+            canonical_local_root(Path::new(&self.display_root))
         } else {
             Ok(self.root.clone())
         }
@@ -456,10 +473,7 @@ impl ClusterStore {
         if let Some(error) = diagnostics.into_iter().next() {
             return Err(error);
         }
-        let expected = format!(
-            "{}/graphs/{graph}.omni",
-            self.canonical_root()?.trim_start_matches("file://")
-        );
+        let expected = managed_graph_root_identity(&self.canonical_root()?, graph);
         let actual = crate::admission::canonical_graph_uri(&self.graph_root(graph))?;
         if actual != expected {
             return Err(Diagnostic::error(
