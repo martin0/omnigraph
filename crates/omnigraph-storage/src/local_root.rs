@@ -139,7 +139,17 @@ fn needs_verbatim_prefix(name: &str) -> bool {
         stem.strip_prefix(prefix).is_some_and(|rest| {
             matches!(
                 rest,
-                "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "\u{b9}" | "\u{b2}"
+                "0" | "1"
+                    | "2"
+                    | "3"
+                    | "4"
+                    | "5"
+                    | "6"
+                    | "7"
+                    | "8"
+                    | "9"
+                    | "\u{b9}"
+                    | "\u{b2}"
                     | "\u{b3}"
             )
         })
@@ -165,8 +175,17 @@ mod tests {
     #[test]
     fn reserved_and_trimmed_names_need_the_verbatim_prefix() {
         for name in [
-            "NUL", "nul", "con.txt", "COM1", "lpt9.log", "aux ", "trailing.", "trailing ", ".",
-            "..", "",
+            "NUL",
+            "nul",
+            "con.txt",
+            "COM1",
+            "lpt9.log",
+            "aux ",
+            "trailing.",
+            "trailing ",
+            ".",
+            "..",
+            "",
         ] {
             assert!(needs_verbatim_prefix(name), "{name:?}");
         }
