@@ -54,14 +54,23 @@ jobs:
         with:
           workspaces: |
             . -> target
+          cache-on-failure: true
 
       - name: Local-root unit tests
         shell: pwsh
         run: ./scripts/ci-annotate.ps1 cargo test --locked -p omnigraph-storage --lib local_root
 
-      - name: Build the CLI and server
+      # Unoptimised frames overflow Windows' default 1 MiB main-thread stack
+      # (Linux gives the main thread 8 MiB), so the smoke binaries link with
+      # the 16 MiB the test jobs give their threads through RUST_MIN_STACK.
+      # The flag reaches only the final link of each binary.
+      - name: Build the CLI
         shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo build --locked -p omnigraph-cli -p omnigraph-server
+        run: ./scripts/ci-annotate.ps1 cargo rustc --locked -p omnigraph-cli --bin omnigraph '--' -C link-arg=/STACK:16777216
+
+      - name: Build the server
+        shell: pwsh
+        run: ./scripts/ci-annotate.ps1 cargo rustc --locked -p omnigraph-server --bin omnigraph-server '--' -C link-arg=/STACK:16777216
 
       - name: Smoke local roots
         shell: pwsh
