@@ -1,0 +1,53 @@
+name: Linux check (scratch)
+
+# Scratch workflow for the fork only: runs the Linux gates for the crates the
+# local-root change touches. Never part of the pull request.
+on:
+  push:
+    branches:
+      - "ci/**"
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Changed crates on Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_MIN_STACK: 16777216
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - run: |
+          rustup toolchain install
+          cargo --version
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: |
+            . -> target
+          cache-on-failure: true
+      - name: Format
+        shell: pwsh
+        run: ./scripts/ci-annotate.ps1 cargo fmt --all '--' --check
+      - name: Storage and cluster tests
+        shell: pwsh
+        run: ./scripts/ci-annotate.ps1 cargo test --locked -p omnigraph-storage -p omnigraph-cluster --features omnigraph-cluster/failpoints
+      - name: Workspace clippy
+        if: always()
+        shell: pwsh
+        run: ./scripts/ci-annotate.ps1 cargo dev-clippy
+      - name: CLI cluster tests
+        if: always()
+        shell: pwsh
+        run: ./scripts/ci-annotate.ps1 cargo test --locked -p omnigraph-cli cluster
+      - name: Server tests
+        if: always()
+        shell: pwsh
+        run: ./scripts/ci-annotate.ps1 cargo test --locked -p omnigraph-server
