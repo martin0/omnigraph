@@ -56,10 +56,12 @@ jobs:
             . -> target
 
       - name: Local-root unit tests
-        run: cargo test --locked -p omnigraph-storage --lib local_root
+        shell: pwsh
+        run: ./scripts/ci-annotate.ps1 cargo test --locked -p omnigraph-storage --lib local_root
 
       - name: Build the CLI and server
-        run: cargo build --locked -p omnigraph-cli -p omnigraph-server
+        shell: pwsh
+        run: ./scripts/ci-annotate.ps1 cargo build --locked -p omnigraph-cli -p omnigraph-server
 
       - name: Smoke local roots
         shell: pwsh

@@ -26,9 +26,23 @@ function Invoke-Og {
     $code = $LASTEXITCODE
     $output | ForEach-Object { Write-Host $_ }
     Write-Host "::endgroup::"
-    if ($code -ne 0) { throw "$Step failed with exit code $code" }
-    if ($output -match '\\\\\?\\') { throw "$Step printed a verbatim path" }
+    if ($code -ne 0) {
+        Write-CiError "$Step failed with exit code $code" $output
+        throw "$Step failed with exit code $code"
+    }
+    if ($output -match '\\\\\?\\') {
+        Write-CiError "$Step printed a verbatim path" $output
+        throw "$Step printed a verbatim path"
+    }
     return ($output -join "`n")
+}
+
+# Repeat a failure as an annotation, readable without opening the job log.
+function Write-CiError {
+    param([string]$Title, [string[]]$Lines)
+    $text = (@($Title) + @($Lines | Select-Object -Last 30)) -join "`n"
+    $text = $text -replace "`r", '' -replace '%', '%25' -replace "`n", '%0A'
+    Write-Host "::error::$text"
 }
 
 # A direct write on a cluster root keeps its admission lock. Release exactly
@@ -141,7 +155,10 @@ graphs:
         Write-Host '::group::server log'
         Get-Content $log, "$log.err" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
         Write-Host '::endgroup::'
-        if (-not $ready -or -not $ready.ready) { throw 'the server did not become ready' }
+        if (-not $ready -or -not $ready.ready) {
+            Write-CiError 'the server did not become ready' @(Get-Content $log, "$log.err" -ErrorAction SilentlyContinue)
+            throw 'the server did not become ready'
+        }
         Write-Host "readyz: $($ready | ConvertTo-Json -Compress)"
         if ($ready.ready_graph_count -lt 1) { throw 'the server serves no ready graph' }
     } finally {
