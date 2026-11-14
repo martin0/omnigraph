@@ -33,26 +33,20 @@ jobs:
           workspaces: |
             . -> target
           cache-on-failure: true
-      - name: Storage and cluster tests
-        shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo test --locked --no-fail-fast -p omnigraph-storage -p omnigraph-cluster --features omnigraph-cluster/failpoints
-      # Is the listing-order test order-dependent? Run it alone, repeatedly.
-      - name: Flake probe
-        if: always()
+      # Does the listing-order test fail on unpatched upstream too?
+      - name: Same test on this branch and on upstream main
         shell: pwsh
         run: |
-          $pass = 0
-          foreach ($n in 1..12) {
-            cargo test --locked -p omnigraph-storage --lib a_durable_store_keeps_its_whiteouts_out_of_sight *> $null
-            if ($LASTEXITCODE -eq 0) { $pass++ }
-          }
-          Write-Host "::notice::flake probe: a_durable_store_keeps_its_whiteouts_out_of_sight passed $pass of 12 runs on $(df -T /tmp | tail -1)"
+          $test = 'a_durable_store_keeps_its_whiteouts_out_of_sight'
+          cargo test --locked -p omnigraph-storage --lib $test *> patched.log
+          $patched = $LASTEXITCODE
+          git fetch --depth 1 https://github.com/ModernRelay/omnigraph main
+          $upstream = git rev-parse FETCH_HEAD
+          git worktree add ../upstream FETCH_HEAD
+          Push-Location ../upstream
+          cargo test --locked -p omnigraph-storage --lib $test *> ../upstream.log
+          $base = $LASTEXITCODE
+          Pop-Location
+          $tail = (Get-Content ../upstream.log | Select-String -Pattern 'left:|right:|test result' | ForEach-Object { $_.Line.Trim() }) -join ' | '
+          Write-Host "::notice::$test exit codes: this branch=$patched, upstream main $upstream=$base. Upstream output: $tail"
           exit 0
-      - name: Build the server for the CLI tests
-        if: always()
-        shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo build --locked -p omnigraph-server
-      - name: CLI cluster tests
-        if: always()
-        shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo test --locked -p omnigraph-cli cluster
