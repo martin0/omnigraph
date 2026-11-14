@@ -255,7 +255,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn unix_path_a_url_parse_would_alter_is_refused() {
+    fn issue_907_unix_path_a_url_parse_would_alter_is_refused() {
         // Each of these used to produce a root that resolved to another
         // directory: `?` and `#` end the URL path, `%41` decodes to `A`.
         for path in ["/srv/og?13", "/srv/og#13", "/srv/og%41"] {
@@ -269,7 +269,7 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn windows_canonical_path_has_no_verbatim_prefix() {
+    fn issue_907_windows_canonical_path_has_no_verbatim_prefix() {
         let dir = tempfile::tempdir().unwrap();
 
         let raw = std::fs::canonicalize(dir.path()).unwrap();

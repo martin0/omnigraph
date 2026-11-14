@@ -4751,7 +4751,7 @@ async fn plan_observes_graph_removal_and_policy_rebinding() {
 /// own spelling, so it equals `admission::canonical_graph_uri` everywhere and
 /// stays byte-identical to every identity already stored on Unix.
 #[test]
-fn managed_graph_root_identity_uses_the_platform_spelling() {
+fn issue_907_managed_graph_root_identity_uses_the_platform_spelling() {
     #[cfg(unix)]
     assert_eq!(
         store::managed_graph_root_identity("file:///srv/og", "knowledge"),
