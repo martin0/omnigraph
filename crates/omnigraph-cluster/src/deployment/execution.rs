@@ -2189,10 +2189,8 @@ async fn prepare_graphs(
             }
             let uri = store.graph_root(&graph);
             let canonical = admission::canonical_graph_uri(&uri)?;
-            let expected_uri = format!(
-                "{}/graphs/{graph}.omni",
-                bundle.canonical_root.trim_start_matches("file://")
-            );
+            let expected_uri =
+                crate::store::managed_graph_root_identity(&bundle.canonical_root, &graph);
             if canonical != expected_uri {
                 return Err(refusal(
                     "cluster_graph_root_mismatch",
@@ -2602,10 +2600,7 @@ fn validate_pending_input(
             if bundle.resources.contains_key(&graph_address(graph))
                 || pending.authorization.base.schema_contracts.get(graph) != Some(&delete.contract)
                 || delete.root
-                    != format!(
-                        "{}/graphs/{graph}.omni",
-                        bundle.canonical_root.trim_start_matches("file://")
-                    )
+                    != crate::store::managed_graph_root_identity(&bundle.canonical_root, graph)
                 || entry.create.is_some()
                 || entry.intent.is_some()
             {

@@ -21,6 +21,9 @@ use thiserror::Error;
 mod binding;
 pub use binding::{CapturedStorageBinding, StorageDestination, storage_handle_for_binding};
 
+mod local_root;
+pub use local_root::{canonicalize_local_path, local_file_uri, local_root_path};
+
 mod scoped;
 pub use scoped::{OWNED_STORE_NAME, StorageIoScope};
 
@@ -2928,7 +2931,7 @@ pub fn write_queue_root_identity(normalized_root: &str) -> Result<String> {
     let mut suffix = Vec::new();
 
     loop {
-        if let Ok(canonical) = std::fs::canonicalize(ancestor) {
+        if let Ok(canonical) = canonicalize_local_path(ancestor) {
             let mut identity = canonical;
             for component in suffix.iter().rev() {
                 identity.push(component);
@@ -3015,7 +3018,7 @@ fn resolve_existing(path: &Path) -> PathBuf {
     let mut missing = Vec::new();
     let mut existing = path;
     loop {
-        if let Ok(resolved) = std::fs::canonicalize(existing) {
+        if let Ok(resolved) = canonicalize_local_path(existing) {
             return missing
                 .iter()
                 .rev()
@@ -3064,6 +3067,15 @@ pub fn absolutize_lexically(path: PathBuf) -> Result<PathBuf> {
 }
 
 fn local_path_from_file_uri(uri: &str) -> Result<PathBuf> {
+    // `file://C:\data` is the scheme followed by the native path, the spelling
+    // `local_file_uri` writes. It is taken literally: a URL parse would read
+    // the drive letter as a host and decode percent signs in the path.
+    #[cfg(windows)]
+    if let Some(native) = uri.strip_prefix(FILE_SCHEME_PREFIX)
+        && is_windows_drive_path(native)
+    {
+        return Ok(PathBuf::from(native));
+    }
     let url = Url::parse(uri).map_err(|err| {
         StorageError::backend(
             StorageFailureKind::Configuration,
