@@ -4,6 +4,7 @@ name: Windows smoke
 # built CLI and server against a standalone graph, its branches, a local
 # cluster root and a server booted from that root. No other job runs the
 # binaries on Windows; the release archive job only checks that they start.
+# Nothing waits on this workflow (docs/dev/ci.md).
 on:
   pull_request:
     paths:
@@ -49,28 +50,27 @@ jobs:
           rustup toolchain install
           cargo --version
 
+      # Saved from `main` only, like every other cache here (docs/dev/ci.md).
       - name: Cache Rust build data
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: |
             . -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
 
       - name: Local-root unit tests
-        shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo test --locked -p omnigraph-storage --lib local_root
+        run: cargo test --locked -p omnigraph-storage --lib local_root
 
       # Unoptimised frames overflow Windows' default 1 MiB main-thread stack
       # (Linux gives the main thread 8 MiB), so the smoke binaries link with
       # the 16 MiB the test jobs give their threads through RUST_MIN_STACK.
       # The flag reaches only the final link of each binary.
       - name: Build the CLI
-        shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo rustc --locked -p omnigraph-cli --bin omnigraph '--' -C link-arg=/STACK:16777216
+        run: cargo rustc --locked -p omnigraph-cli --bin omnigraph -- -C link-arg=/STACK:16777216
 
       - name: Build the server
-        shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo rustc --locked -p omnigraph-server --bin omnigraph-server '--' -C link-arg=/STACK:16777216
+        run: cargo rustc --locked -p omnigraph-server --bin omnigraph-server -- -C link-arg=/STACK:16777216
 
       - name: Smoke local roots
         shell: pwsh
