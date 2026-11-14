@@ -1,0 +1,56 @@
+name: Windows release build (scratch)
+
+# Fork-only: builds optimised Windows binaries of this branch for local use.
+# Never part of the pull request.
+on:
+  push:
+    branches:
+      - "ci/windows-release-build"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Release binaries for Windows
+    runs-on: windows-latest
+    timeout-minutes: 240
+    env:
+      CARGO_TERM_COLOR: always
+      # As the release archives: an empty RUSTFLAGS replaces the workspace cfg.
+      RUSTFLAGS: ""
+      OMNIGRAPH_SOURCE_VERSION: ${{ github.sha }}
+      OMNIGRAPH_RELEASE_CHANNEL: edge
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - run: choco install protoc -y
+      - run: |
+          rustup toolchain install
+          cargo --version
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: |
+            . -> target
+          cache-on-failure: true
+      - name: Build release binaries
+        run: cargo build --release --locked -p omnigraph-cli -p omnigraph-server --features omnigraph-server/aws
+      - name: Smoke the release binaries
+        shell: pwsh
+        run: ./scripts/windows-smoke.ps1 -Bin target/release
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/omnigraph.exe, target/release/omnigraph-server.exe dist/
+          & dist/omnigraph.exe version | Tee-Object dist/VERSION.txt
+          Get-ChildItem dist -Filter *.exe | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Tee-Object dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt | ForEach-Object { Write-Host "::notice::sha256 $_" }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: omnigraph-windows-x86_64-issue-907
+          path: dist/
+          if-no-files-found: error
