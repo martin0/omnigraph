@@ -918,6 +918,8 @@ mod tests {
         );
     }
 
+    // Creating a symlink needs a privilege on Windows that test hosts lack.
+    #[cfg(unix)]
     #[tokio::test]
     async fn open_refuses_a_symlink_anywhere_under_the_root() {
         let dir = tempfile::tempdir().unwrap();
