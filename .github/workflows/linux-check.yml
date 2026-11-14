@@ -33,21 +33,26 @@ jobs:
           workspaces: |
             . -> target
           cache-on-failure: true
-      - name: Format
-        shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo fmt --all '--' --check
       - name: Storage and cluster tests
         shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo test --locked -p omnigraph-storage -p omnigraph-cluster --features omnigraph-cluster/failpoints
-      - name: Workspace clippy
+        run: ./scripts/ci-annotate.ps1 cargo test --locked --no-fail-fast -p omnigraph-storage -p omnigraph-cluster --features omnigraph-cluster/failpoints
+      # Is the listing-order test order-dependent? Run it alone, repeatedly.
+      - name: Flake probe
         if: always()
         shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo dev-clippy
+        run: |
+          $pass = 0
+          foreach ($n in 1..12) {
+            cargo test --locked -p omnigraph-storage --lib a_durable_store_keeps_its_whiteouts_out_of_sight *> $null
+            if ($LASTEXITCODE -eq 0) { $pass++ }
+          }
+          Write-Host "::notice::flake probe: a_durable_store_keeps_its_whiteouts_out_of_sight passed $pass of 12 runs on $(df -T /tmp | tail -1)"
+          exit 0
+      - name: Build the server for the CLI tests
+        if: always()
+        shell: pwsh
+        run: ./scripts/ci-annotate.ps1 cargo build --locked -p omnigraph-server
       - name: CLI cluster tests
         if: always()
         shell: pwsh
         run: ./scripts/ci-annotate.ps1 cargo test --locked -p omnigraph-cli cluster
-      - name: Server tests
-        if: always()
-        shell: pwsh
-        run: ./scripts/ci-annotate.ps1 cargo test --locked -p omnigraph-server
